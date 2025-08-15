@@ -30,68 +30,120 @@ def search_youtube_music(ytm, query, max_results=5):
         print(f"Error searching YouTube Music: {e}")
     return None
 
+def test_youtube_music_headers(ytmusic_headers):
+    """Test if YouTube Music headers are valid"""
+    try:
+        ytm = YTMusic(ytmusic_headers)
+        # Try to get user info to test authentication
+        user_info = ytm.get_user_info()
+        return {"success": True, "user_info": user_info}
+    except Exception as e:
+        return {"error": str(e)}
+
 def transfer_playlist(spotify_playlist_url, ytmusic_headers, spotify_client_id=None, spotify_client_secret=None):
     """Transfer a Spotify playlist to YouTube Music"""
     try:
+        print(f"Starting transfer for URL: {spotify_playlist_url}")
+        print(f"Headers provided: {list(ytmusic_headers.keys())}")
+        
         # Initialize YouTube Music with provided headers
-        ytm = YTMusic(ytmusic_headers)
+        try:
+            ytm = YTMusic(ytmusic_headers)
+            print("YouTube Music client initialized successfully")
+        except Exception as e:
+            print(f"Error initializing YouTube Music: {e}")
+            return {"error": f"YouTube Music initialization failed: {str(e)}"}
         
         # Initialize Spotify client
-        if spotify_client_id and spotify_client_secret:
-            sp = spotipy.Spotify(
-                client_credentials_manager=SpotifyClientCredentials(
-                    client_id=spotify_client_id,
-                    client_secret=spotify_client_secret
+        try:
+            if spotify_client_id and spotify_client_secret:
+                sp = spotipy.Spotify(
+                    client_credentials_manager=SpotifyClientCredentials(
+                        client_id=spotify_client_id,
+                        client_secret=spotify_client_secret
+                    )
                 )
-            )
-        else:
-            # Try to use environment variables
-            sp = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials())
+            else:
+                # Try to use environment variables
+                sp = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials())
+            print("Spotify client initialized successfully")
+        except Exception as e:
+            print(f"Error initializing Spotify: {e}")
+            return {"error": f"Spotify initialization failed: {str(e)}"}
         
         # Extract playlist ID from URL
         playlist_id = extract_playlist_id_from_url(spotify_playlist_url)
         if not playlist_id:
             return {"error": "Invalid Spotify playlist URL"}
         
+        print(f"Extracted playlist ID: {playlist_id}")
+        
         # Get Spotify playlist details
-        playlist = sp.playlist(playlist_id)
-        playlist_name = playlist['name']
-        playlist_description = f"Transferred from Spotify playlist: {playlist_name}"
+        try:
+            playlist = sp.playlist(playlist_id)
+            playlist_name = playlist['name']
+            playlist_description = f"Transferred from Spotify playlist: {playlist_name}"
+            print(f"Playlist name: {playlist_name}")
+        except Exception as e:
+            print(f"Error getting playlist details: {e}")
+            return {"error": f"Failed to get playlist details: {str(e)}"}
         
         # Get all tracks from the playlist
-        tracks = []
-        results = sp.playlist_tracks(playlist_id)
-        tracks.extend(results['items'])
-        
-        while results['next']:
-            results = sp.playlist_tracks(playlist_id, offset=len(tracks))
+        try:
+            tracks = []
+            results = sp.playlist_tracks(playlist_id)
             tracks.extend(results['items'])
+            
+            while results['next']:
+                results = sp.playlist_tracks(playlist_id, offset=len(tracks))
+                tracks.extend(results['items'])
+            
+            print(f"Found {len(tracks)} tracks in playlist")
+        except Exception as e:
+            print(f"Error getting tracks: {e}")
+            return {"error": f"Failed to get playlist tracks: {str(e)}"}
         
         # Create YouTube Music playlist
-        ytm_playlist_id = ytm.create_playlist(
-            title=playlist_name,
-            description=playlist_description,
-            privacy_status="PRIVATE"
-        )
+        try:
+            ytm_playlist_id = ytm.create_playlist(
+                title=playlist_name,
+                description=playlist_description,
+                privacy_status="PRIVATE"
+            )
+            print(f"Created YouTube Music playlist with ID: {ytm_playlist_id}")
+        except Exception as e:
+            print(f"Error creating playlist: {e}")
+            return {"error": f"Failed to create YouTube Music playlist: {str(e)}"}
         
         # Transfer tracks
         transferred_count = 0
         failed_tracks = []
         video_ids = []
         
-        for track in tracks:
+        for i, track in enumerate(tracks):
             if track['track']:
                 track_name = track['track']['name']
                 artists = [artist['name'] for artist in track['track']['artists']]
                 search_query = f"{track_name} {' '.join(artists)}"
                 
-                # Search for the song on YouTube Music
-                video_id = search_youtube_music(ytm, search_query)
+                print(f"Processing track {i+1}/{len(tracks)}: {track_name} by {', '.join(artists)}")
                 
-                if video_id:
-                    video_ids.append(video_id)
-                    transferred_count += 1
-                else:
+                # Search for the song on YouTube Music
+                try:
+                    video_id = search_youtube_music(ytm, search_query)
+                    
+                    if video_id:
+                        video_ids.append(video_id)
+                        transferred_count += 1
+                        print(f"✓ Found: {video_id}")
+                    else:
+                        failed_tracks.append({
+                            'name': track_name,
+                            'artists': artists
+                        })
+                        print(f"✗ Not found")
+                except Exception as e:
+                    print(f"Error searching for track: {e}")
                     failed_tracks.append({
                         'name': track_name,
                         'artists': artists
@@ -99,7 +151,14 @@ def transfer_playlist(spotify_playlist_url, ytmusic_headers, spotify_client_id=N
         
         # Add all found songs to the playlist
         if video_ids:
-            ytm.add_playlist_items(ytm_playlist_id, video_ids)
+            try:
+                ytm.add_playlist_items(ytm_playlist_id, video_ids)
+                print(f"Added {len(video_ids)} tracks to playlist")
+            except Exception as e:
+                print(f"Error adding tracks to playlist: {e}")
+                return {"error": f"Failed to add tracks to playlist: {str(e)}"}
+        
+        print(f"Transfer completed. {transferred_count} tracks transferred, {len(failed_tracks)} failed")
         
         return {
             "success": True,
@@ -111,6 +170,7 @@ def transfer_playlist(spotify_playlist_url, ytmusic_headers, spotify_client_id=N
         }
         
     except Exception as e:
+        print(f"Unexpected error in transfer_playlist: {e}")
         return {"error": str(e)}
 
 def get_html_template():
@@ -606,6 +666,10 @@ def get_html_template():
                     <button type="submit" class="btn" id="submitBtn">
                         <span>Launch The Great Migration! 🚀</span>
                     </button>
+                    
+                    <button type="button" class="btn" id="testBtn" style="margin-top: 1rem; background: var(--warning);">
+                        <span>Test YouTube Music Headers 🔧</span>
+                    </button>
                 </form>
 
                 <div class="loading" id="loading">
@@ -662,6 +726,7 @@ def get_html_template():
         const result = document.getElementById('result');
         const notification = document.getElementById('notification');
         const submitBtn = document.getElementById('submitBtn');
+        const testBtn = document.getElementById('testBtn');
 
         function showNotification(message, type = 'success') {
             notification.textContent = message;
@@ -677,12 +742,14 @@ def get_html_template():
             loading.style.display = 'block';
             result.style.display = 'none';
             submitBtn.disabled = true;
+            testBtn.disabled = true;
         }
 
         function hideLoading() {
             form.style.display = 'block';
             loading.style.display = 'none';
             submitBtn.disabled = false;
+            testBtn.disabled = false;
         }
 
         function showResult(content, type = 'success') {
@@ -793,6 +860,37 @@ def get_html_template():
                 hideLoading();
             }
         });
+
+        testBtn.addEventListener('click', async function() {
+            const ytmusicHeadersText = document.getElementById('ytmusicHeaders').value;
+            let ytmusicHeaders;
+            try {
+                ytmusicHeaders = JSON.parse(ytmusicHeadersText);
+            } catch (error) {
+                showNotification('Invalid JSON in YouTube Music headers. Please check your format! 😅', 'error');
+                return;
+            }
+
+            showLoading();
+            try {
+                const response = await fetch('/test-headers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ytmusic_headers: ytmusicHeaders })
+                });
+                const result = await response.json();
+
+                if (result.error) {
+                    showResult(`<strong>YouTube Music Header Test Failed 😅</strong><br><br>Error: ${result.error}`, 'error');
+                } else {
+                    showResult(`<strong>YouTube Music Header Test Successful! 🎉</strong><br><br>User Info: ${JSON.stringify(result.user_info, null, 2)}`, 'success');
+                }
+            } catch (error) {
+                showResult(`<strong>Network Error 😱</strong><br><br>Error: ${error.message}`, 'error');
+            } finally {
+                hideLoading();
+            }
+        });
     </script>
 </body>
 </html>
@@ -834,8 +932,60 @@ class handler(BaseHTTPRequestHandler):
                     self.wfile.write(json.dumps({"error": "Missing required parameters"}).encode('utf-8'))
                     return
                 
+                # First test the YouTube Music headers
+                test_result = test_youtube_music_headers(ytmusic_headers)
+                if not test_result.get('success'):
+                    self.send_response(400)
+                    self.send_header('Content-type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+                    self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        "error": f"YouTube Music authentication failed: {test_result.get('error')}",
+                        "debug_info": "Please check your headers. Make sure you're logged into YouTube Music and the headers are fresh."
+                    }).encode('utf-8'))
+                    return
+                
                 # Perform the actual transfer
                 result = transfer_playlist(spotify_url, ytmusic_headers)
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+                self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+                self.end_headers()
+                self.wfile.write(json.dumps(result).encode('utf-8'))
+                
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+                self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+        elif self.path == '/test-headers':
+            try:
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
+                data = json.loads(post_data.decode('utf-8'))
+                
+                ytmusic_headers = data.get('ytmusic_headers')
+                
+                if not ytmusic_headers:
+                    self.send_response(400)
+                    self.send_header('Content-type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+                    self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": "Missing YouTube Music headers"}).encode('utf-8'))
+                    return
+                
+                # Test the headers
+                result = test_youtube_music_headers(ytmusic_headers)
                 
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
