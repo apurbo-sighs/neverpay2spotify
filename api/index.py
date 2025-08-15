@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """
 NeverPay2Spotify - Vercel Serverless Function
+Using spotify_to_ytmusic library for proper functionality
 """
 
 import json
 import re
+import os
+import tempfile
 from http.server import BaseHTTPRequestHandler
+from spotify_to_ytmusic import SpotifyToYtmusic
 
 def extract_playlist_id_from_url(spotify_url):
     """Extract playlist ID from Spotify URL"""
@@ -34,7 +38,7 @@ def test_youtube_music_headers(ytmusic_headers):
         return {"error": str(e)}
 
 def transfer_playlist(spotify_playlist_url, ytmusic_headers):
-    """Simulate transfer for testing"""
+    """Transfer a Spotify playlist to YouTube Music using spotify_to_ytmusic"""
     try:
         print(f"Starting transfer for URL: {spotify_playlist_url}")
         print(f"Headers provided: {list(ytmusic_headers.keys())}")
@@ -46,15 +50,40 @@ def transfer_playlist(spotify_playlist_url, ytmusic_headers):
         
         print(f"Extracted playlist ID: {playlist_id}")
         
-        # For now, just return success to test the flow
-        return {
-            "success": True,
-            "playlist_name": "Test Playlist",
-            "total_tracks": 5,
-            "transferred_count": 3,
-            "failed_tracks": [],
-            "ytm_playlist_id": "test_playlist_id_123"
-        }
+        # Create a temporary settings file for spotify_to_ytmusic
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.ini', delete=False) as f:
+            settings_content = f"""[spotify]
+client_id = 
+client_secret = 
+redirect_uri = https://127.0.0.1
+
+[youtube]
+headers = {json.dumps(ytmusic_headers)}
+"""
+            f.write(settings_content)
+            settings_file = f.name
+        
+        try:
+            # Initialize spotify_to_ytmusic with our settings
+            styt = SpotifyToYtmusic(settings_file)
+            
+            # Transfer the playlist
+            result = styt.create(spotify_playlist_url)
+            
+            print(f"Transfer completed successfully")
+            
+            return {
+                "success": True,
+                "playlist_name": "Transferred Playlist",
+                "total_tracks": result.get('total_tracks', 0),
+                "transferred_count": result.get('transferred_count', 0),
+                "failed_tracks": result.get('failed_tracks', []),
+                "ytm_playlist_id": result.get('playlist_id', 'unknown')
+            }
+            
+        finally:
+            # Clean up temporary file
+            os.unlink(settings_file)
         
     except Exception as e:
         print(f"Unexpected error in transfer_playlist: {e}")
@@ -74,7 +103,7 @@ class handler(BaseHTTPRequestHandler):
 <!DOCTYPE html>
 <html>
 <head>
-    <title>NeverPay2Spotify - Test</title>
+    <title>NeverPay2Spotify - Powered by spotify_to_ytmusic</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 40px; background: #0f0f23; color: white; }
         .container { max-width: 800px; margin: 0 auto; }
@@ -85,12 +114,13 @@ class handler(BaseHTTPRequestHandler):
         .result { margin-top: 20px; padding: 15px; border-radius: 5px; }
         .success { background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; }
         .error { background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; }
+        .info { background: rgba(59, 130, 246, 0.1); border: 1px solid #3b82f6; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🎵 NeverPay2Spotify - Test Version</h1>
-        <p>Testing basic functionality first...</p>
+        <h1>🎵 NeverPay2Spotify</h1>
+        <p>Powered by <a href="https://github.com/sigma67/spotify_to_ytmusic" style="color: #6366f1;">spotify_to_ytmusic</a> - The official Spotify to YouTube Music transfer tool!</p>
         
         <div class="form-group">
             <label for="spotifyUrl">Spotify Playlist URL:</label>
@@ -103,9 +133,22 @@ class handler(BaseHTTPRequestHandler):
         </div>
         
         <button onclick="testHeaders()">Test Headers</button>
-        <button onclick="transferPlaylist()">Test Transfer</button>
+        <button onclick="transferPlaylist()">Transfer Playlist</button>
         
         <div id="result" class="result" style="display: none;"></div>
+        
+        <div class="info" style="margin-top: 20px; padding: 15px;">
+            <h3>How to get YouTube Music Headers:</h3>
+            <ol>
+                <li>Open YouTube Music in your browser</li>
+                <li>Press F12 to open Developer Tools</li>
+                <li>Go to Network tab</li>
+                <li>Refresh the page or perform any action</li>
+                <li>Click on any request to music.youtube.com</li>
+                <li>Copy the request headers (Cookie, Authorization, etc.)</li>
+                <li>Paste them as JSON in the form above</li>
+            </ol>
+        </div>
     </div>
     
     <script>
@@ -155,6 +198,8 @@ class handler(BaseHTTPRequestHandler):
             }
             
             try {
+                showResult('Starting transfer... This may take a few minutes.', 'info');
+                
                 const response = await fetch('/transfer', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -168,7 +213,7 @@ class handler(BaseHTTPRequestHandler):
                 if (result.error) {
                     showResult('Transfer Failed: ' + result.error, 'error');
                 } else {
-                    showResult('Transfer Test Successful! ' + result.transferred_count + ' tracks transferred. Playlist ID: ' + result.ytm_playlist_id, 'success');
+                    showResult('Transfer Successful! ' + result.transferred_count + ' tracks transferred. Playlist ID: ' + result.ytm_playlist_id, 'success');
                 }
             } catch (error) {
                 showResult('Network Error: ' + error.message, 'error');

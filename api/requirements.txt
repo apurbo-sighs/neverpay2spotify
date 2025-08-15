@@ -1,1 +1,4 @@
-# No external dependencies needed for basic testing
+spotify_to_ytmusic==0.8.0
+ytmusicapi==0.24.1
+spotipy==2.23.0
+requests==2.31.0
