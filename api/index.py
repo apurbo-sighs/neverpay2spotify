@@ -118,107 +118,395 @@ def transfer_playlist(spotify_playlist_url, ytmusic_headers, spotify_client_id=N
 
 def get_html_template():
     """Get the HTML template content"""
-    template_path = os.path.join(os.path.dirname(__file__), '..', 'templates', 'index.html')
-    try:
-        with open(template_path, 'r', encoding='utf-8') as f:
-            return f.read()
-    except FileNotFoundError:
-        # Fallback HTML if template not found
-        return """
+    return """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NeverPay2Spotify - Transfer Playlists</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        .container { max-width: 800px; margin: 0 auto; }
-        .form-group { margin-bottom: 20px; }
-        input, textarea { width: 100%; padding: 10px; margin-top: 5px; }
-        button { padding: 10px 20px; background: #007bff; color: white; border: none; cursor: pointer; }
-        .result { margin-top: 20px; padding: 15px; border-radius: 5px; }
-        .success { background: #d4edda; border: 1px solid #c3e6cb; }
-        .error { background: #f8d7da; border: 1px solid #f5c6cb; }
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --success: #10b981;
+            --error: #ef4444;
+            --background: #f8fafc;
+            --surface: #ffffff;
+            --text: #1e293b;
+            --text-secondary: #64748b;
+            --border: #e2e8f0;
+            --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--background);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+
+        .header p {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: var(--surface);
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text);
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 2px solid var(--border);
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            transition: all 0.2s;
+            background: var(--surface);
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgb(99 102 241 / 0.1);
+        }
+
+        .upload-section {
+            border: 2px dashed var(--border);
+            border-radius: 0.5rem;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .upload-section:hover {
+            border-color: var(--primary);
+            background: rgb(99 102 241 / 0.05);
+        }
+
+        .upload-section.dragover {
+            border-color: var(--primary);
+            background: rgb(99 102 241 / 0.1);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: var(--shadow);
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .notification {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+            display: none;
+        }
+
+        .notification.success {
+            background: rgb(16 185 129 / 0.1);
+            border: 1px solid var(--success);
+            color: var(--success);
+        }
+
+        .notification.error {
+            background: rgb(239 68 68 / 0.1);
+            border: 1px solid var(--error);
+            color: var(--error);
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .spinner {
+            border: 3px solid var(--border);
+            border-top: 3px solid var(--primary);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .result {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            display: none;
+        }
+
+        .result.success {
+            background: rgb(16 185 129 / 0.1);
+            border: 1px solid var(--success);
+        }
+
+        .result.error {
+            background: rgb(239 68 68 / 0.1);
+            border: 1px solid var(--error);
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--text);
+        }
+
+        .optional-note {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🎵 NeverPay2Spotify</h1>
-        <p>Transfer your Spotify playlists to YouTube Music!</p>
-        
-        <form id="transferForm">
-            <div class="form-group">
-                <label for="spotifyUrl">Spotify Playlist URL:</label>
-                <input type="url" id="spotifyUrl" required placeholder="https://open.spotify.com/playlist/...">
+        <div class="header">
+            <h1>🎵 NeverPay2Spotify</h1>
+            <p>Say goodbye to Spotify's subscription fees and hello to YouTube Music's... well, also subscription fees, but at least you get video! 🎬</p>
+        </div>
+
+        <div class="card">
+            <div class="notification" id="notification"></div>
+
+            <form id="transferForm">
+                <div class="section-title">The Great Migration Guide 📋</div>
+                
+                <div class="form-group">
+                    <label for="spotifyUrl">The Playlist You're Breaking Up With 💔</label>
+                    <input type="url" id="spotifyUrl" required placeholder="https://open.spotify.com/playlist/...">
+                    <div class="optional-note">Paste your Spotify playlist URL here. Don't worry, it won't hurt... much.</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="ytmusicHeaders">Your YouTube Music Passport 🛂</label>
+                    <textarea id="ytmusicHeaders" rows="8" required placeholder='{"Cookie": "your-cookie-here", "Authorization": "your-auth-here", ...}'></textarea>
+                    <div class="optional-note">This is like your VIP pass to YouTube Music. Get it from your browser's developer tools!</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="spotifyClientId">Spotify API Credentials (The VIP Pass) 🎫</label>
+                    <input type="text" id="spotifyClientId" placeholder="Your Spotify Client ID">
+                    <div class="optional-note">Optional: Your Spotify API credentials. If you don't have them, we'll try to use the default ones.</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="spotifyClientSecret">The Secret Sauce 🔐</label>
+                    <input type="password" id="spotifyClientSecret" placeholder="Your Spotify Client Secret">
+                    <div class="optional-note">The secret part of your Spotify API credentials. Keep it safe!</div>
+                </div>
+                
+                <button type="submit" class="btn" id="submitBtn">Launch The Great Migration! 🚀</button>
+            </form>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Your music is packing its bags and moving to YouTube Music... This may take a few minutes. 🎵✈️</p>
             </div>
-            
-            <div class="form-group">
-                <label for="ytmusicHeaders">YouTube Music Headers (JSON):</label>
-                <textarea id="ytmusicHeaders" rows="10" required placeholder='{"Cookie": "your-cookie-here", ...}'></textarea>
-            </div>
-            
-            <div class="form-group">
-                <label for="spotifyClientId">Spotify Client ID (optional):</label>
-                <input type="text" id="spotifyClientId" placeholder="Your Spotify Client ID">
-            </div>
-            
-            <div class="form-group">
-                <label for="spotifyClientSecret">Spotify Client Secret (optional):</label>
-                <input type="password" id="spotifyClientSecret" placeholder="Your Spotify Client Secret">
-            </div>
-            
-            <button type="submit">Transfer Playlist</button>
-        </form>
-        
-        <div id="result" class="result" style="display: none;"></div>
+
+            <div class="result" id="result"></div>
+        </div>
     </div>
     
     <script>
-        document.getElementById('transferForm').addEventListener('submit', async function(e) {
+        const form = document.getElementById('transferForm');
+        const loading = document.getElementById('loading');
+        const result = document.getElementById('result');
+        const notification = document.getElementById('notification');
+        const submitBtn = document.getElementById('submitBtn');
+
+        function showNotification(message, type = 'success') {
+            notification.textContent = message;
+            notification.className = `notification ${type}`;
+            notification.style.display = 'block';
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 5000);
+        }
+
+        function showLoading() {
+            form.style.display = 'none';
+            loading.style.display = 'block';
+            result.style.display = 'none';
+            submitBtn.disabled = true;
+        }
+
+        function hideLoading() {
+            form.style.display = 'block';
+            loading.style.display = 'none';
+            submitBtn.disabled = false;
+        }
+
+        function showResult(content, type = 'success') {
+            result.innerHTML = content;
+            result.className = `result ${type}`;
+            result.style.display = 'block';
+        }
+
+        form.addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            const resultDiv = document.getElementById('result');
-            resultDiv.style.display = 'block';
-            resultDiv.className = 'result';
-            resultDiv.innerHTML = 'Transferring... Please wait.';
+            const spotifyUrl = document.getElementById('spotifyUrl').value;
+            const ytmusicHeadersText = document.getElementById('ytmusicHeaders').value;
+            const spotifyClientId = document.getElementById('spotifyClientId').value;
+            const spotifyClientSecret = document.getElementById('spotifyClientSecret').value;
+
+            // Validate headers JSON
+            let ytmusicHeaders;
+            try {
+                ytmusicHeaders = JSON.parse(ytmusicHeadersText);
+            } catch (error) {
+                showNotification('Invalid JSON in YouTube Music headers. Please check your format! 😅', 'error');
+                return;
+            }
+
+            showLoading();
             
             try {
                 const response = await fetch('/transfer', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        spotify_url: document.getElementById('spotifyUrl').value,
-                        ytmusic_headers: JSON.parse(document.getElementById('ytmusicHeaders').value),
-                        spotify_client_id: document.getElementById('spotifyClientId').value || null,
-                        spotify_client_secret: document.getElementById('spotifyClientSecret').value || null
+                        spotify_url: spotifyUrl,
+                        ytmusic_headers: ytmusicHeaders,
+                        spotify_client_id: spotifyClientId || null,
+                        spotify_client_secret: spotifyClientSecret || null
                     })
                 });
                 
                 const result = await response.json();
                 
                 if (result.error) {
-                    resultDiv.className = 'result error';
-                    resultDiv.innerHTML = `<strong>Error:</strong> ${result.error}`;
+                    showResult(`<strong>Migration Failed 😅</strong><br><br>Error: ${result.error}`, 'error');
                 } else {
-                    resultDiv.className = 'result success';
-                    resultDiv.innerHTML = `
-                        <strong>Success!</strong><br>
-                        Playlist: ${result.playlist_name}<br>
-                        Total tracks: ${result.total_tracks}<br>
-                        Transferred: ${result.transferred_count}<br>
-                        YouTube Music Playlist ID: ${result.ytm_playlist_id}
-                    `;
+                    showResult(`
+                        <strong>Migration Successful! 🎉</strong><br><br>
+                        <strong>Playlist:</strong> ${result.playlist_name}<br>
+                        <strong>Total tracks:</strong> ${result.total_tracks}<br>
+                        <strong>Successfully transferred:</strong> ${result.transferred_count}<br>
+                        <strong>YouTube Music Playlist ID:</strong> ${result.ytm_playlist_id}<br><br>
+                        ${result.failed_tracks.length > 0 ? `<strong>Failed tracks (${result.failed_tracks.length}):</strong><br>` + 
+                        result.failed_tracks.slice(0, 5).map(track => `• ${track.name} by ${track.artists.join(', ')}`).join('<br>') + 
+                        (result.failed_tracks.length > 5 ? '<br>... and more' : '') : ''}
+                    `, 'success');
                 }
             } catch (error) {
-                resultDiv.className = 'result error';
-                resultDiv.innerHTML = `<strong>Error:</strong> ${error.message}`;
+                showResult(`<strong>Network Error 😱</strong><br><br>Error: ${error.message}`, 'error');
+            } finally {
+                hideLoading();
+            }
+        });
+
+        // Handle file upload for headers
+        const headersTextarea = document.getElementById('ytmusicHeaders');
+        
+        // Add drag and drop functionality
+        headersTextarea.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            this.parentElement.classList.add('dragover');
+        });
+
+        headersTextarea.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            this.parentElement.classList.remove('dragover');
+        });
+
+        headersTextarea.addEventListener('drop', function(e) {
+            e.preventDefault();
+            this.parentElement.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                if (file.type === 'application/json') {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        headersTextarea.value = e.target.result;
+                        showNotification('Headers file uploaded successfully! 📁', 'success');
+                    };
+                    reader.readAsText(file);
+                } else {
+                    showNotification('Please upload a JSON file! 📄', 'error');
+                }
             }
         });
     </script>
 </body>
 </html>
-        """
+    """
 
 # Vercel entry point
 def handler(request, context):
