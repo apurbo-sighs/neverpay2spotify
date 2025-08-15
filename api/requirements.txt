@@ -1,3 +1,1 @@
-ytmusicapi==0.24.1
-spotipy==2.23.0
-requests==2.31.0
+# No external dependencies needed for basic testing
